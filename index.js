@@ -29,6 +29,25 @@ async function run() {
     await client.connect();
 
 
+    const db = client.db("assetVerse_DB");
+    const packageCollection = db.collection("packages");
+
+
+
+    // package related api
+    app.get("/packages", async (req, res) => {
+      const cursor = userCollection.find();
+      const result = await cursor.toArray();
+      res.send(result);
+    })
+
+
+    app.post("/packages", async (req, res) => {
+      const package = req.body;
+      const result = await packageCollection.insertOne(package);
+      res.send(result);
+    });
+
 
 
 
