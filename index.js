@@ -65,6 +65,7 @@ async function run() {
 
     const db = client.db("assetVerse_DB");
     const usersCollection = db.collection("users");
+    const assetsCollection = db.collection("assets");
     const packageCollection = db.collection("packages");
 
 
@@ -109,6 +110,39 @@ async function run() {
 
 
 
+    // assets related api
+    app.get("/assets", verifyToken, verifyHR, async (req, res) => {
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const query = { hrEmail: req.decoded.email };
+
+    const assets = await assetsCollection.find(query).skip(skip).limit(limit).toArray();
+    total = await assetsCollection.countDocuments(query);
+
+    res.send({ assets, total });
+    });
+
+
+    app.patch("/assets/:id", verifyToken, verifyHR, async (req, res) => {
+        const id = new ObjectId(req.params.id);
+        const asset = await assetsCollection.findOne({ _id: id });
+
+        if (asset.hrEmail !== req.decoded.email) {
+            return res.status(403).send({ message: "Forbidden" });
+        }
+        const result = await assetsCollection.updateOne(
+            { _id: id },
+            { $set: req.body }
+        );
+        res.send(result);
+        });
+
+
+
+
+
 
     // package related api
     app.get("/packages", async (req, res) => {
@@ -116,6 +150,7 @@ async function run() {
       const result = await cursor.toArray();
       res.send(result);
     })
+
 
     app.post("/packages", verifyToken, verifyHR, async (req, res) => {
       const package = req.body;
