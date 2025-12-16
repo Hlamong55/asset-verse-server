@@ -69,7 +69,6 @@ async function run() {
 
 
 
-
     // jwt related api
     app.post("/jwt", (req, res) => {
     const user = req.body; //
@@ -78,6 +77,36 @@ async function run() {
     });
     res.send({ token });
     });
+
+
+
+
+    // user related api
+    app.post("/users", async (req, res) => {
+    const user = req.body;
+    const existingUser = await usersCollection.findOne({
+    email: user.email,
+    });
+
+    if (existingUser) {
+    return res.send({ message: "User already exists" });
+    }
+    const result = await usersCollection.insertOne(user);
+    res.send(result);
+    });
+
+
+    app.get("/users/:email", verifyToken, async (req, res) => {
+    const email = req.params.email;
+
+    if (email !== req.decoded.email) {
+    return res.status(403).send({ message: "Forbidden access" });
+    }
+    const user = await usersCollection.findOne({ email });
+    res.send(user);
+    });
+
+
 
 
 
