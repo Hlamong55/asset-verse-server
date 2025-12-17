@@ -54,6 +54,7 @@ async function run() {
     const db = client.db("assetVerse_DB");
     const usersCollection = db.collection("users");
     const assetsCollection = db.collection("assets");
+    const requestsCollection = db.collection("requests");
     const assignedAssetsCollection = db.collection("assignedAssets");
     const packageCollection = db.collection("packages");
 
@@ -184,6 +185,40 @@ async function run() {
     const result = await assignedAssetsCollection.find({ employeeEmail: email }).sort({ assignmentDate:-1 }).toArray();
     res.send(result);
     });
+
+
+
+
+
+
+    // asset request related api
+    app.post("/requests", verifyToken, async (req, res) => {
+    const email = req.decoded.email;
+
+    const request = {
+        assetId: new ObjectId(req.body.assetId),
+        assetName: req.body.assetName,
+        assetType: req.body.assetType,
+        requesterName: req.body.requesterName,
+        requesterEmail: email,
+        hrEmail: req.body.hrEmail,
+        companyName: req.body.companyName,
+        requestDate: new Date(),
+        approvalDate: null,
+        requestStatus: "pending",
+        note: req.body.note || "",
+    };
+    const result = await requestsCollection.insertOne(request);
+    res.send(result);
+    });
+
+
+    app.get("/available-assets", verifyToken, async (req, res) => {
+    const assets = await assetsCollection.find({ availableQuantity: { $gt: 0 } }).toArray();
+    res.send(assets);
+    });
+
+
 
 
 
