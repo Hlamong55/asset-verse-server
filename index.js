@@ -125,6 +125,27 @@ async function run() {
     });
 
 
+
+    app.post("/assets", verifyToken, verifyHR, async (req, res) => {
+    const hr = await usersCollection.findOne({ email: req.decoded.email });
+
+    const asset = {
+    productName: req.body.productName,
+    productImage: req.body.productImage,
+    productType: req.body.productType,
+    productQuantity: Number(req.body.productQuantity),
+    availableQuantity: Number(req.body.productQuantity),
+    dateAdded: new Date(),
+    hrEmail: req.decoded.email,
+    companyName: hr.companyName,
+    };
+
+    const result = await assetsCollection.insertOne(asset);
+    res.send(result);
+    });
+
+
+
     app.patch("/assets/:id", verifyToken, verifyHR, async (req, res) => {
         const id = new ObjectId(req.params.id);
         const asset = await assetsCollection.findOne({ _id: id });
