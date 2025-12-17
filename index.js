@@ -2,7 +2,7 @@ const express = require('express')
 const cors = require('cors');
 const app = express()
 require('dotenv').config()
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const jwt = require("jsonwebtoken");
 const port = process.env.PORT || 3000;
 
@@ -30,18 +30,6 @@ const verifyToken = (req, res, next) => {
 };
 
 
-// hr token verify
-const verifyHR = async (req, res, next) => {
-  const email = req.decoded.email;
-
-  const user = await usersCollection.findOne({ email });
-  if (user?.role !== "hr") {
-    return res.status(403).send({ message: "Forbidden" });
-  }
-  next();
-};
-
-
 
 
 
@@ -66,16 +54,29 @@ async function run() {
     const db = client.db("assetVerse_DB");
     const usersCollection = db.collection("users");
     const assetsCollection = db.collection("assets");
+    const assignedAssetsCollection = db.collection("assignedAssets");
     const packageCollection = db.collection("packages");
+
+
+
+
+    // hr token verify
+    const verifyHR = async (req, res, next) => {
+    const email = req.decoded.email;
+
+    const user = await usersCollection.findOne({ email });
+    if (user?.role !== "hr") {
+    return res.status(403).send({ message: "Forbidden" });
+    }
+    next();
+    };
 
 
 
     // jwt related api
     app.post("/jwt", (req, res) => {
     const user = req.body; //
-    const token = jwt.sign(user, process.env.JWT_SECRET, {
-    expiresIn: "3d",
-    });
+    const token = jwt.sign(user, process.env.JWT_SECRET, { expiresIn: "3d"});
     res.send({ token });
     });
 
@@ -110,6 +111,7 @@ async function run() {
 
 
 
+
     // assets related api
     app.get("/assets", verifyToken, verifyHR, async (req, res) => {
     const page = Number(req.query.page) || 1;
@@ -118,12 +120,11 @@ async function run() {
 
     const query = { hrEmail: req.decoded.email };
 
-    const assets = await assetsCollection.find(query).skip(skip).limit(limit).toArray();
+    const assets = await assetsCollection.find(query).skip(skip).limit(limit).sort({ dateAdded: -1 }).toArray();
     total = await assetsCollection.countDocuments(query);
 
     res.send({ assets, total });
     });
-
 
 
     app.post("/assets", verifyToken, verifyHR, async (req, res) => {
@@ -139,26 +140,19 @@ async function run() {
     hrEmail: req.decoded.email,
     companyName: hr.companyName,
     };
-
     const result = await assetsCollection.insertOne(asset);
     res.send(result);
     });
 
 
-
     app.patch("/assets/:id", verifyToken, verifyHR, async (req, res) => {
-        const id = new ObjectId(req.params.id);
-        const asset = await assetsCollection.findOne({ _id: id });
+    const id = req.params.id;
+    const query = { _id: new ObjectId(id) };
+    const { _id, ...updateData } = req.body;
 
-        if (asset.hrEmail !== req.decoded.email) {
-            return res.status(403).send({ message: "Forbidden" });
-        }
-        const result = await assetsCollection.updateOne(
-            { _id: id },
-            { $set: req.body }
-        );
-        res.send(result);
-        });
+    const result = await assetsCollection.updateOne( query, { $set: updateData });
+    res.send(result);
+    });
 
 
 
@@ -178,6 +172,19 @@ async function run() {
       const result = await packageCollection.insertOne(package);
       res.send(result);
     });
+
+
+
+
+
+    // employee assigned assets
+    app.get("/assigned-assets", verifyToken, async (req, res) => {
+    const email = req.decoded.email;
+
+    const result = await assignedAssetsCollection.find({ employeeEmail: email }).sort({ assignmentDate:-1 }).toArray();
+    res.send(result);
+    });
+
 
 
 
