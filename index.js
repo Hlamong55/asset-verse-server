@@ -110,6 +110,18 @@ async function run() {
     });
 
 
+    app.patch("/users/:email", verifyToken, async (req, res) => {
+    if (req.params.email !== req.decoded.email) {
+        return res.status(403).send({ message: "Forbidden" });
+    }
+     result = await usersCollection.updateOne(
+        { email: req.params.email },
+        { $set: req.body }
+    );
+    res.send(result);
+    });
+
+
 
 
 
