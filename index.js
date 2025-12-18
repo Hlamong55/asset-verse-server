@@ -51,8 +51,10 @@ async function run() {
     // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
 
+
     const db = client.db("assetVerse_DB");
     const usersCollection = db.collection("users");
+    const employeeAffiCollection = db.collection("employeeAffiliations");
     const assetsCollection = db.collection("assets");
     const requestsCollection = db.collection("requests");
     const assignedAssetsCollection = db.collection("assignedAssets");
@@ -73,7 +75,6 @@ async function run() {
     };
 
 
-
     // jwt related api
     app.post("/jwt", (req, res) => {
     const user = req.body; //
@@ -84,7 +85,8 @@ async function run() {
 
 
 
-    // user related api
+
+    // 1. user related api
     app.post("/users", async (req, res) => {
     const user = req.body;
     const existingUser = await usersCollection.findOne({
@@ -125,7 +127,42 @@ async function run() {
 
 
 
-    // assets related api
+
+    // 2. employee affiliation api
+    app.get("/employee-affiliations/:email", verifyToken, async (req, res) => {
+    const email = req.params.email;
+
+    if (email !== req.decoded.email) {
+    return res.status(403).send({ message: "Forbidden" });
+    }
+    const affiliations = await employeeAffiCollection.find({ employeeEmail: email, status: "active" }).toArray();
+
+    res.send(affiliations);
+    });
+
+
+    app.get("/my-team", verifyToken, async (req, res) => {
+    const { companyName } = req.query;
+
+    if (!companyName) {
+    return res.status(400).send({ message: "Company required" });
+    }
+
+    const affiliations = await employeeAffiCollection.find({ companyName, status: "active" }).toArray();
+
+    const emails = affiliations.map(a => a.employeeEmail);
+
+    const team = await usersCollection.find({ email: { $in: emails } }).project({ name: 1, email: 1, profileImage: 1 }).toArray();
+
+    res.send(team);
+    });
+
+
+
+
+
+
+    // 3. assets related api
     app.get("/assets", verifyToken, verifyHR, async (req, res) => {
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 10;
@@ -168,34 +205,9 @@ async function run() {
     });
 
 
-
-
-
-
-    // package related api
-    app.get("/packages", async (req, res) => {
-      const cursor = packageCollection.find();
-      const result = await cursor.toArray();
-      res.send(result);
-    })
-
-
-    app.post("/packages", verifyToken, verifyHR, async (req, res) => {
-      const package = req.body;
-      const result = await packageCollection.insertOne(package);
-      res.send(result);
-    });
-
-
-
-
-
-    // employee assigned assets
-    app.get("/assigned-assets", verifyToken, async (req, res) => {
-    const email = req.decoded.email;
-
-    const result = await assignedAssetsCollection.find({ employeeEmail: email }).sort({ assignmentDate:-1 }).toArray();
-    res.send(result);
+    app.get("/available-assets", verifyToken, async (req, res) => {
+    const assets = await assetsCollection.find({ availableQuantity: { $gt: 0 } }).toArray();
+    res.send(assets);
     });
 
 
@@ -203,7 +215,7 @@ async function run() {
 
 
 
-    // asset request related api
+    // 4. request related api
     app.post("/requests", verifyToken, async (req, res) => {
     const email = req.decoded.email;
 
@@ -225,11 +237,36 @@ async function run() {
     });
 
 
-    app.get("/available-assets", verifyToken, async (req, res) => {
-    const assets = await assetsCollection.find({ availableQuantity: { $gt: 0 } }).toArray();
-    res.send(assets);
+
+
+
+
+    // 5. assigned assets api
+    app.get("/assigned-assets", verifyToken, async (req, res) => {
+    const email = req.decoded.email;
+
+    const result = await assignedAssetsCollection.find({ employeeEmail: email }).sort({ assignmentDate:-1 }).toArray();
+    res.send(result);
     });
 
+
+
+
+
+
+    // 6. package related api
+    app.get("/packages", async (req, res) => {
+      const cursor = packageCollection.find();
+      const result = await cursor.toArray();
+      res.send(result);
+    })
+
+
+    app.post("/packages", verifyToken, verifyHR, async (req, res) => {
+      const package = req.body;
+      const result = await packageCollection.insertOne(package);
+      res.send(result);
+    });
 
 
 
@@ -240,7 +277,7 @@ async function run() {
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
-  } finally {
+    } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
   }
