@@ -463,6 +463,66 @@ async function run() {
 
 
 
+    // charts related api
+    app.get("/hr/pie-charts", verifyToken, verifyHR, async (req, res) => {
+    const hrEmail = req.decoded.email;
+
+    const result = await assetsCollection.aggregate([
+    { $match: { hrEmail } },
+    {
+      $group: {
+        _id: "$productType",
+        count: { $sum: 1 }
+      }
+    }
+    ]).toArray();
+
+    const stats = { returnable: 0, nonReturnable: 0 };
+    result.forEach(item => {
+    if (item._id === "Returnable") {
+      stats.returnable = item.count;
+    }
+    if (item._id === "Non-returnable") {
+      stats.nonReturnable = item.count;
+    }
+    });
+
+    res.send([
+    { name: "Returnable", value: stats.returnable },
+    { name: "Non-returnable", value: stats.nonReturnable }
+    ]);
+    });
+
+
+    app.get("/hr/bar-charts", verifyToken, verifyHR, async (req, res) => {
+    const hrEmail = req.decoded.email;
+
+    result = await requestsCollection.aggregate([ { $match: { hrEmail } }, 
+    {
+      $group: {
+        _id: "$assetName",
+        count: { $sum: 1 },
+      },
+    },
+    { $sort: { count: -1 } },
+    { $limit: 5 },
+    {
+      $project: {
+        _id: 0,
+        assetName: "$_id",
+        requests: "$count",
+      },
+    },
+    ]).toArray();
+
+    res.send(result);
+    });
+
+
+
+
+
+
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
