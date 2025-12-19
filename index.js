@@ -226,12 +226,13 @@ async function run() {
     // 4. request related api
     app.post("/requests", verifyToken, async (req, res) => {
     const email = req.decoded.email;
+    const employee = await usersCollection.findOne({ email });
 
     const request = {
         assetId: new ObjectId(req.body.assetId),
         assetName: req.body.assetName,
         assetType: req.body.assetType,
-        requesterName: req.body.requesterName,
+        requesterName: employee.name,
         requesterEmail: email,
         hrEmail: req.body.hrEmail,
         companyName: req.body.companyName,
@@ -252,117 +253,135 @@ async function run() {
     });
 
 
+
     app.patch("/requests/approve/:id", verifyToken, verifyHR, async (req, res) => {
     try {
-    const requestId = req.params.id;
+      const requestId = req.params.id;
 
-    const request = await requestsCollection.findOne({
-      _id: new ObjectId(requestId),
-    });
-
-    if (!request) {
-      return res.status(404).send({ message: "Request not found" });
-    }
-
-    if (request.status !== "pending") {
-      return res.status(400).send({ message: "Request already processed" });
-    }
-
-    // find asset
-    const asset = await assetsCollection.findOne({
-      _id: new ObjectId(request.assetId),
-    });
-
-    if (!asset || asset.availableQuantity <= 0) {
-      return res.status(400).send({ message: "Asset not available" });
-    }
-
-    // decrease asset quantity
-    await assetsCollection.updateOne(
-      { _id: asset._id },
-      { $inc: { availableQuantity: -1 } }
-    );
-
-    // update request status
-    await requestsCollection.updateOne(
-      { _id: request._id },
-      {
-        $set: {
-          status: "approved",
-          approvedAt: new Date(),
-        },
-      }
-    );
-
-    // add asset to employee
-    await usersCollection.updateOne(
-      { email: request.employeeEmail },
-      {
-        $push: {
-          assets: {
-            assetId: asset._id,
-            productName: asset.productName,
-            assignedAt: new Date(),
-          },
-        },
-      }
-    );
-
-    // check affiliation
-    const existingAffiliation = await employeeAffiCollection.findOne({
-      employeeEmail: request.employeeEmail,
-      companyName: asset.companyName,
-    });
-
-    if (!existingAffiliation) {
-      await employeeAffiCollection.insertOne({
-        employeeEmail: request.employeeEmail,
-        companyName: asset.companyName,
-        companyLogo: asset.companyLogo || "",
-        affiliationDate: new Date(),
+      // find request
+      const request = await requestsCollection.findOne({
+        _id: new ObjectId(requestId),
       });
-    }
 
-    res.send({ message: "Request approved successfully" });
+      if (!request) {
+        return res.status(404).send({ message: "Request not found" });
+      }
+
+      if (request.requestStatus !== "pending") {
+        return res
+          .status(400)
+          .send({ message: "Request already processed" });
+      }
+
+      // find asset
+      const asset = await assetsCollection.findOne({
+        _id: new ObjectId(request.assetId),
+      });
+
+      if (!asset || asset.availableQuantity <= 0) {
+        return res
+          .status(400)
+          .send({ message: "Asset not available" });
+      }
+
+      await assetsCollection.updateOne(
+        { _id: asset._id },
+        { $inc: { availableQuantity: -1 } }
+      );
+
+      // update request
+      await requestsCollection.updateOne(
+        { _id: request._id },
+        {
+          $set: {
+            requestStatus: "approved",
+            approvalDate: new Date(),
+            processedBy: req.decoded.email,
+          },
+        }
+      );
+
+      // add asset to employee
+      await usersCollection.updateOne(
+        { email: request.requesterEmail },
+        {
+          $push: {
+            assets: {
+              assetId: asset._id,
+              assetName: asset.productName,
+              assetType: asset.productType,
+              assignedDate: new Date(),
+            },
+          },
+        }
+      );
+
+      // affiliation
+      const existingAffiliation =
+        await employeeAffiCollection.findOne({
+          employeeEmail: request.requesterEmail,
+          companyName: request.companyName,
+        });
+
+      if (!existingAffiliation) {
+        await employeeAffiCollection.insertOne({
+          employeeEmail: request.requesterEmail,
+          employeeName: request.requesterName,
+          hrEmail: request.hrEmail,
+          companyName: request.companyName,
+          companyLogo: asset.companyLogo || "",
+          affiliationDate: new Date(),
+          status: "active",
+        });
+      }
+
+      res.send({ message: "Request approved successfully" });
     } catch (error) {
-    console.error(error);
-    res.status(500).send({ message: "Approve failed" });
+      console.error(error);
+      res.status(500).send({ message: "Approve failed" });
     }
-    });
+  }
+    );
+
 
 
     app.patch("/requests/reject/:id", verifyToken, verifyHR, async (req, res) => {
     try {
-    const requestId = req.params.id;
+      const requestId = req.params.id;
 
-    const request = await requestsCollection.findOne({
-      _id: new ObjectId(requestId),
-    });
+      // find request
+      const request = await requestsCollection.findOne({
+        _id: new ObjectId(requestId),
+      });
 
-    if (!request) {
-      return res.status(404).send({ message: "Request not found" });
-    }
-
-    if (request.status !== "pending") {
-      return res.status(400).send({ message: "Request already processed" });
-    }
-
-    await requestsCollection.updateOne(
-      { _id: request._id },
-      {
-        $set: {
-          status: "rejected",
-          rejectedAt: new Date(),
-        },
+      if (!request) {
+        return res.status(404).send({ message: "Request not found" });
       }
-    );
 
-    res.send({ message: "Request rejected successfully" });
+      if (request.requestStatus !== "pending") {
+        return res
+          .status(400)
+          .send({ message: "Request already processed" });
+      }
+
+      // update request
+      await requestsCollection.updateOne(
+        { _id: request._id },
+        {
+          $set: {
+            requestStatus: "rejected",
+            approvalDate: new Date(),
+            processedBy: req.decoded.email,
+          },
+        }
+      );
+
+      res.send({ message: "Request rejected successfully" });
     } catch (error) {
-    console.error(error);
-    res.status(500).send({ message: "Reject failed" });
+      console.error(error);
+      res.status(500).send({ message: "Reject failed" });
     }
-    });
+  });
 
 
 
