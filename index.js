@@ -108,12 +108,15 @@ async function run() {
       if (req.params.email !== req.decoded.email) {
         return res.status(403).send({ message: "Forbidden" });
       }
-      result = await usersCollection.updateOne(
+      const updateData = { ...req.body, updatedAt: new Date(), };
+
+      const result = await usersCollection.updateOne(
         { email: req.params.email },
-        { $set: req.body }
+        { $set: updateData }
       );
       res.send(result);
     });
+
 
 
 
@@ -275,6 +278,11 @@ async function run() {
               .send({ message: "Request already processed" });
           }
 
+
+          const hr = await usersCollection.findOne({ email: request.hrEmail
+          });
+
+
           // find asset
           const asset = await assetsCollection.findOne({
             _id: new ObjectId(request.assetId),
@@ -311,10 +319,12 @@ async function run() {
             employeeName: request.requesterName,
             hrEmail: request.hrEmail,
             companyName: request.companyName,
+            requestDate: request.requestDate,
             assignmentDate: new Date(),
             returnDate: null,
             status: "assigned",
           });
+
 
           // affiliation
           const existing = await employeeAffiCollection.findOne({
@@ -328,7 +338,7 @@ async function run() {
               employeeName: request.requesterName,
               hrEmail: request.hrEmail,
               companyName: request.companyName,
-              companyLogo: asset.companyLogo || "",
+              companyLogo: hr?.companyLogo || "",
               affiliationDate: new Date(),
               status: "active",
             });
@@ -422,6 +432,22 @@ async function run() {
 
     res.send({ message: "Asset returned" });
     });
+
+    app.patch("/fix-request-date/:id", async (req, res) => {
+  const id = req.params.id;
+
+  const result = await assignedAssetsCollection.updateOne(
+    { _id: new ObjectId(id) },
+    {
+      $set: {
+        requestDate: new Date("2025-12-18T23:14:23.277Z"),
+      },
+    }
+  );
+
+  res.send(result);
+});
+
 
 
   
