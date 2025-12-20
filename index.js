@@ -534,30 +534,38 @@ async function run() {
 
     // employee related api
     app.get("/employees", verifyToken, verifyHR, async (req, res) => {
-      const hrEmail = req.decoded.email;
+    const hrEmail = req.decoded.email;
 
-      const affiliations = await employeeAffiCollection
-        .find({ hrEmail, status: "active" })
-        .toArray();
+    const affiliations = await employeeAffiCollection
+    .find({ hrEmail, status: "active" })
+    .toArray();
 
-      const employees = await Promise.all(
-        affiliations.map(async (aff) => {
-          const user = await usersCollection.findOne({
-            email: aff.employeeEmail,
-          });
+    const employees = await Promise.all(
+    affiliations.map(async (aff) => {
+      const user = await usersCollection.findOne({
+        email: aff.employeeEmail,
+      });
 
-          return {
-            _id: aff._id,
-            name: aff.employeeName,
-            email: aff.employeeEmail,
-            joinDate: aff.affiliationDate,
-            photo: user?.profileImage || "",
-            assetsCount: user?.assets?.length || 0,
-          };
-        })
-      );
-      res.send(employees);
+      const assetCount = await assignedAssetsCollection.countDocuments({
+        employeeEmail: aff.employeeEmail,
+        hrEmail,
+        status: "assigned",
+      });
+
+      return {
+        _id: aff._id,
+        name: aff.employeeName,
+        email: aff.employeeEmail,
+        joinDate: aff.affiliationDate,
+        photo: user?.profileImage || "",
+        assetsCount: assetCount,
+      };
+    })
+    );
+
+    res.send(employees);
     });
+
 
     app.patch("/employees/remove/:id", verifyToken, verifyHR, async (req, res) => {
         const id = req.params.id;
