@@ -158,6 +158,67 @@ async function run() {
     });
 
 
+    app.get("/employee/my-team", verifyToken, async (req, res) => {
+    const email = req.decoded.email;
+    const month = new Date().getMonth();
+
+  // employee affiliations
+  const affiliations = await employeeAffiCollection.find({
+    employeeEmail: email,
+    status: "active",
+  }).toArray();
+
+  if (affiliations.length === 0) {
+    return res.send({
+      companies: [],
+      team: [],
+      birthdays: [],
+    });
+  }
+
+  const companyNames = affiliations.map(a => a.companyName);
+
+  // all employees in same companies
+  const teamAffiliations = await employeeAffiCollection.find({
+    companyName: { $in: companyNames },
+    status: "active",
+  }).toArray();
+
+  const teamEmails = [
+    ...new Set(
+      teamAffiliations
+        .map(a => a.employeeEmail)
+        .filter(e => e !== email)
+    ),
+  ];
+
+  const team = await usersCollection.find(
+    { email: { $in: teamEmails } },
+    {
+      projection: {
+        name: 1,
+        email: 1,
+        profileImage: 1,
+        role: 1,
+        dateOfBirth: 1,
+      },
+    }
+  ).toArray();
+
+  const birthdays = team.filter(u => {
+    if (!u.dateOfBirth) return false;
+    return new Date(u.dateOfBirth).getMonth() === month;
+  });
+
+  res.send({
+    companies: affiliations,
+    team,
+    birthdays,
+  });
+    });
+
+
+
 
 
 
