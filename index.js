@@ -5,6 +5,8 @@ require("dotenv").config();
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const jwt = require("jsonwebtoken");
 const port = process.env.PORT || 3000;
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+
 
 // middleware
 app.use(express.json());
@@ -53,6 +55,7 @@ async function run() {
     const requestsCollection = db.collection("requests");
     const assignedAssetsCollection = db.collection("assignedAssets");
     const packageCollection = db.collection("packages");
+    const paymentsCollection = db.collection("payments");
 
 
 
@@ -340,8 +343,15 @@ async function run() {
           }
 
 
+          // hr package
           const hr = await usersCollection.findOne({ email: request.hrEmail
           });
+
+          if (hr.currentEmployees >= hr.packageLimit) {
+            return res.status(403).send({
+            message: "Employee limit reached. Please upgrade package.",
+          });
+          }
 
 
           // find asset
@@ -494,22 +504,6 @@ async function run() {
     res.send({ message: "Asset returned" });
     });
 
-    app.patch("/fix-request-date/:id", async (req, res) => {
-  const id = req.params.id;
-
-  const result = await assignedAssetsCollection.updateOne(
-    { _id: new ObjectId(id) },
-    {
-      $set: {
-        requestDate: new Date("2025-12-18T23:14:23.277Z"),
-      },
-    }
-  );
-
-  res.send(result);
-});
-
-
 
   
 
@@ -527,6 +521,122 @@ async function run() {
       const result = await packageCollection.insertOne(package);
       res.send(result);
     });
+
+
+
+
+
+    // 7. payment related api
+   app.post("/create-checkout-session", verifyToken, verifyHR, async (req, res) => {
+    try {
+    const { packageId } = req.body;
+
+    const selectedPackage = await packageCollection.findOne({
+      _id: new ObjectId(packageId),
+    });
+
+    if (!selectedPackage) {
+      return res.status(404).send({ message: "Package not found" });
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      mode: "payment",
+
+      customer_email: req.decoded.email,
+
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: selectedPackage.name,
+            },
+            unit_amount: selectedPackage.price * 100,
+          },
+          quantity: 1,
+        },
+      ],
+
+      success_url: `${process.env.CLIENT_URL}/dashboard/hr/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.CLIENT_URL}/dashboard/hr/upgrade-package`,
+    });
+
+    res.send({ url: session.url });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({ message: "Checkout failed" });
+  }
+  });
+
+
+   app.post("/confirm-upgrade", verifyToken, verifyHR, async (req, res) => {
+  try {
+    const { sessionId } = req.body;
+
+    const session = await stripe.checkout.sessions.retrieve(
+      sessionId,
+      { expand: ["line_items"] }
+    );
+
+    if (session.payment_status !== "paid") {
+      return res.status(400).send({ message: "Payment not completed" });
+    }
+
+    const hrEmail = session.customer_email;
+
+    const packageName =
+      session.line_items.data[0].price.product.name;
+
+    const selectedPackage = await packageCollection.findOne({
+      name: packageName,
+    });
+
+    if (!selectedPackage) {
+      return res.status(404).send({ message: "Package not found" });
+    }
+
+    await usersCollection.updateOne(
+      { email: hrEmail },
+      {
+        $set: {
+          subscription: selectedPackage.name,
+          packageLimit: selectedPackage.employeeLimit,
+          updatedAt: new Date(),
+        },
+      }
+    );
+
+    await paymentsCollection.insertOne({
+      hrEmail,
+      packageName: selectedPackage.name,
+      employeeLimit: selectedPackage.employeeLimit,
+      amount: selectedPackage.price,
+      transactionId: session.id,
+      paymentDate: new Date(),
+      status: "completed",
+    });
+
+    res.send({ message: "Upgrade confirmed" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({ message: "Confirm upgrade failed" });
+  }
+  });
+
+
+   app.get("/payments", verifyToken, verifyHR, async (req, res) => {
+    const email = req.decoded.email;
+
+    const payments = await paymentsCollection
+    .find({ hrEmail: email })
+    .sort({ paymentDate: -1 })
+    .toArray();
+
+    res.send(payments);
+    });
+
+
 
 
 
