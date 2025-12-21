@@ -8,9 +8,13 @@ const port = process.env.PORT || 3000;
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
 
+
 // middleware
 app.use(express.json());
 app.use(cors());
+
+
+
 
 // token verify
 const verifyToken = (req, res, next) => {
@@ -29,6 +33,8 @@ const verifyToken = (req, res, next) => {
   });
 };
 
+
+
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster01.quh7cvg.mongodb.net/?appName=Cluster01`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -40,13 +46,12 @@ const client = new MongoClient(uri, {
   },
 });
 
+
+
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
-
-
-
 
     const db = client.db("assetVerse_DB");
     const usersCollection = db.collection("users");
@@ -56,7 +61,6 @@ async function run() {
     const assignedAssetsCollection = db.collection("assignedAssets");
     const packageCollection = db.collection("packages");
     const paymentsCollection = db.collection("payments");
-
 
 
 
@@ -72,13 +76,14 @@ async function run() {
       next();
     };
 
-
     // jwt related api
     app.post("/jwt", (req, res) => {
       const user = req.body; //
       const token = jwt.sign(user, process.env.JWT_SECRET, { expiresIn: "3d" });
       res.send({ token });
     });
+
+
 
 
 
@@ -111,7 +116,7 @@ async function run() {
       if (req.params.email !== req.decoded.email) {
         return res.status(403).send({ message: "Forbidden" });
       }
-      const updateData = { ...req.body, updatedAt: new Date(), };
+      const updateData = { ...req.body, updatedAt: new Date() };
 
       const result = await usersCollection.updateOne(
         { email: req.params.email },
@@ -160,64 +165,69 @@ async function run() {
       res.send(team);
     });
 
-
     app.get("/employee/my-team", verifyToken, async (req, res) => {
-    const email = req.decoded.email;
-    const month = new Date().getMonth();
+      const email = req.decoded.email;
+      const month = new Date().getMonth();
 
-  // employee affiliations
-  const affiliations = await employeeAffiCollection.find({
-    employeeEmail: email,
-    status: "active",
-  }).toArray();
+      // employee affiliations
+      const affiliations = await employeeAffiCollection
+        .find({
+          employeeEmail: email,
+          status: "active",
+        })
+        .toArray();
 
-  if (affiliations.length === 0) {
-    return res.send({
-      companies: [],
-      team: [],
-      birthdays: [],
-    });
-  }
+      if (affiliations.length === 0) {
+        return res.send({
+          companies: [],
+          team: [],
+          birthdays: [],
+        });
+      }
 
-  const companyNames = affiliations.map(a => a.companyName);
+      const companyNames = affiliations.map((a) => a.companyName);
 
-  // all employees in same companies
-  const teamAffiliations = await employeeAffiCollection.find({
-    companyName: { $in: companyNames },
-    status: "active",
-  }).toArray();
+      // all employees in same companies
+      const teamAffiliations = await employeeAffiCollection
+        .find({
+          companyName: { $in: companyNames },
+          status: "active",
+        })
+        .toArray();
 
-  const teamEmails = [
-    ...new Set(
-      teamAffiliations
-        .map(a => a.employeeEmail)
-        .filter(e => e !== email)
-    ),
-  ];
+      const teamEmails = [
+        ...new Set(
+          teamAffiliations
+            .map((a) => a.employeeEmail)
+            .filter((e) => e !== email)
+        ),
+      ];
 
-  const team = await usersCollection.find(
-    { email: { $in: teamEmails } },
-    {
-      projection: {
-        name: 1,
-        email: 1,
-        profileImage: 1,
-        role: 1,
-        dateOfBirth: 1,
-      },
-    }
-  ).toArray();
+      const team = await usersCollection
+        .find(
+          { email: { $in: teamEmails } },
+          {
+            projection: {
+              name: 1,
+              email: 1,
+              profileImage: 1,
+              role: 1,
+              dateOfBirth: 1,
+            },
+          }
+        )
+        .toArray();
 
-  const birthdays = team.filter(u => {
-    if (!u.dateOfBirth) return false;
-    return new Date(u.dateOfBirth).getMonth() === month;
-  });
+      const birthdays = team.filter((u) => {
+        if (!u.dateOfBirth) return false;
+        return new Date(u.dateOfBirth).getMonth() === month;
+      });
 
-  res.send({
-    companies: affiliations,
-    team,
-    birthdays,
-  });
+      res.send({
+        companies: affiliations,
+        team,
+        birthdays,
+      });
     });
 
 
@@ -323,7 +333,12 @@ async function run() {
       res.send(result);
     });
 
-    app.patch("/requests/approve/:id", verifyToken, verifyHR, async (req, res) => {
+
+    app.patch(
+      "/requests/approve/:id",
+      verifyToken,
+      verifyHR,
+      async (req, res) => {
         try {
           const requestId = req.params.id;
 
@@ -342,17 +357,14 @@ async function run() {
               .send({ message: "Request already processed" });
           }
 
-
           // hr package
-          const hr = await usersCollection.findOne({ email: request.hrEmail
-          });
+          const hr = await usersCollection.findOne({ email: request.hrEmail });
 
           if (hr.currentEmployees >= hr.packageLimit) {
             return res.status(403).send({
-            message: "Employee limit reached. Please upgrade package.",
-          });
+              message: "Employee limit reached. Please upgrade package.",
+            });
           }
-
 
           // find asset
           const asset = await assetsCollection.findOne({
@@ -396,7 +408,6 @@ async function run() {
             status: "assigned",
           });
 
-
           // affiliation
           const existing = await employeeAffiCollection.findOne({
             employeeEmail: request.requesterEmail,
@@ -413,6 +424,17 @@ async function run() {
               affiliationDate: new Date(),
               status: "active",
             });
+
+            await usersCollection.updateOne(
+              {
+                email: request.hrEmail,
+                currentEmployees: { $lt: hr.packageLimit },
+              },
+              {
+                $inc: { currentEmployees: 1 },
+                $set: { updatedAt: new Date() },
+              }
+            );
           }
 
           res.send({ message: "Request approved successfully" });
@@ -420,9 +442,15 @@ async function run() {
           console.error(error);
           res.status(500).send({ message: "Approve failed" });
         }
-    });
+      }
+    );
 
-    app.patch("/requests/reject/:id", verifyToken, verifyHR, async (req, res) => {
+
+    app.patch(
+      "/requests/reject/:id",
+      verifyToken,
+      verifyHR,
+      async (req, res) => {
         try {
           const requestId = req.params.id;
 
@@ -458,8 +486,8 @@ async function run() {
           console.error(error);
           res.status(500).send({ message: "Reject failed" });
         }
-    });
-
+      }
+    );
 
 
 
@@ -476,36 +504,35 @@ async function run() {
       res.send(result);
     });
 
-
     app.patch("/assigned-assets/return/:id", verifyToken, async (req, res) => {
-    const id = req.params.id;
-    const assigned = await assignedAssetsCollection.findOne({
-    _id: new ObjectId(id),
+      const id = req.params.id;
+      const assigned = await assignedAssetsCollection.findOne({
+        _id: new ObjectId(id),
+      });
+
+      if (!assigned || assigned.status !== "assigned") {
+        return res.status(400).send({ message: "Invalid return" });
+      }
+
+      await assignedAssetsCollection.updateOne(
+        { _id: assigned._id },
+        {
+          $set: {
+            status: "returned",
+            returnDate: new Date(),
+          },
+        }
+      );
+
+      await assetsCollection.updateOne(
+        { _id: new ObjectId(assigned.assetId) },
+        { $inc: { availableQuantity: 1 } }
+      );
+
+      res.send({ message: "Asset returned" });
     });
 
-    if (!assigned || assigned.status !== "assigned") {
-    return res.status(400).send({ message: "Invalid return" });
-    }
 
-    await assignedAssetsCollection.updateOne(
-    { _id: assigned._id },
-    {
-      $set: {
-        status: "returned",
-        returnDate: new Date(),
-      },
-    });
-
-    await assetsCollection.updateOne(
-    { _id: new ObjectId(assigned.assetId) },
-    { $inc: { availableQuantity: 1 } }
-    );
-
-    res.send({ message: "Asset returned" });
-    });
-
-
-  
 
 
 
@@ -515,6 +542,7 @@ async function run() {
       const result = await cursor.toArray();
       res.send(result);
     });
+
 
     app.post("/packages", verifyToken, verifyHR, async (req, res) => {
       const package = req.body;
@@ -526,116 +554,122 @@ async function run() {
 
 
 
+
     // 7. payment related api
-   app.post("/create-checkout-session", verifyToken, verifyHR, async (req, res) => {
-    try {
-    const { packageId } = req.body;
+    app.post("/confirm-upgrade", async (req, res) => {
+      try {
+        const { sessionId } = req.body;
 
-    const selectedPackage = await packageCollection.findOne({
-      _id: new ObjectId(packageId),
-    });
+        if (!sessionId) {
+          return res.status(400).send({ message: "Session ID missing" });
+        }
 
-    if (!selectedPackage) {
-      return res.status(404).send({ message: "Package not found" });
-    }
+        const session = await stripe.checkout.sessions.retrieve(sessionId, {
+          expand: ["line_items.data.price.product"],
+        });
 
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card"],
-      mode: "payment",
+        if (session.payment_status !== "paid") {
+          return res.status(400).send({ message: "Payment not completed" });
+        }
 
-      customer_email: req.decoded.email,
+        const hrEmail = session.customer_email;
 
-      line_items: [
-        {
-          price_data: {
-            currency: "usd",
-            product_data: {
-              name: selectedPackage.name,
+        const packageName = session.line_items.data[0].price.product.name;
+
+        const selectedPackage = await packageCollection.findOne({
+          name: packageName,
+        });
+
+        if (!selectedPackage) {
+          return res.status(404).send({ message: "Package not found" });
+        }
+
+        await usersCollection.updateOne(
+          { email: hrEmail },
+          {
+            $set: {
+              subscription: selectedPackage.name,
+              packageLimit: selectedPackage.employeeLimit,
+              updatedAt: new Date(),
             },
-            unit_amount: selectedPackage.price * 100,
-          },
-          quantity: 1,
-        },
-      ],
+          }
+        );
 
-      success_url: `${process.env.CLIENT_URL}/dashboard/hr/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.CLIENT_URL}/dashboard/hr/upgrade-package`,
+        await paymentsCollection.insertOne({
+          hrEmail,
+          packageName: selectedPackage.name,
+          employeeLimit: selectedPackage.employeeLimit,
+          amount: selectedPackage.price,
+          transactionId: session.id,
+          paymentDate: new Date(),
+          status: "completed",
+        });
+
+        res.send({ message: "Upgrade confirmed" });
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ message: "Confirm upgrade failed" });
+      }
     });
 
-    res.send({ url: session.url });
-  } catch (error) {
-    console.error(error);
-    res.status(500).send({ message: "Checkout failed" });
-  }
-  });
 
+    app.post(
+      "/create-checkout-session",
+      verifyToken,
+      verifyHR,
+      async (req, res) => {
+        try {
+          const { packageId } = req.body;
 
-   app.post("/confirm-upgrade", verifyToken, verifyHR, async (req, res) => {
-  try {
-    const { sessionId } = req.body;
+          const selectedPackage = await packageCollection.findOne({
+            _id: new ObjectId(packageId),
+          });
 
-    const session = await stripe.checkout.sessions.retrieve(
-      sessionId,
-      { expand: ["line_items"] }
-    );
+          if (!selectedPackage) {
+            return res.status(404).send({ message: "Package not found" });
+          }
 
-    if (session.payment_status !== "paid") {
-      return res.status(400).send({ message: "Payment not completed" });
-    }
+          const session = await stripe.checkout.sessions.create({
+            payment_method_types: ["card"],
+            mode: "payment",
 
-    const hrEmail = session.customer_email;
+            customer_email: req.decoded.email,
 
-    const packageName =
-      session.line_items.data[0].price.product.name;
+            line_items: [
+              {
+                price_data: {
+                  currency: "usd",
+                  product_data: {
+                    name: selectedPackage.name,
+                  },
+                  unit_amount: selectedPackage.price * 100,
+                },
+                quantity: 1,
+              },
+            ],
 
-    const selectedPackage = await packageCollection.findOne({
-      name: packageName,
-    });
+            success_url: `${process.env.CLIENT_URL}/dashboard/hr/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: `${process.env.CLIENT_URL}/dashboard/hr/upgrade-package`,
+          });
 
-    if (!selectedPackage) {
-      return res.status(404).send({ message: "Package not found" });
-    }
-
-    await usersCollection.updateOne(
-      { email: hrEmail },
-      {
-        $set: {
-          subscription: selectedPackage.name,
-          packageLimit: selectedPackage.employeeLimit,
-          updatedAt: new Date(),
-        },
+          res.send({ url: session.url });
+        } catch (error) {
+          console.error(error);
+          res.status(500).send({ message: "Checkout failed" });
+        }
       }
     );
 
-    await paymentsCollection.insertOne({
-      hrEmail,
-      packageName: selectedPackage.name,
-      employeeLimit: selectedPackage.employeeLimit,
-      amount: selectedPackage.price,
-      transactionId: session.id,
-      paymentDate: new Date(),
-      status: "completed",
+    app.get("/payments", verifyToken, verifyHR, async (req, res) => {
+      const email = req.decoded.email;
+
+      const payments = await paymentsCollection
+        .find({ hrEmail: email })
+        .sort({ paymentDate: -1 })
+        .toArray();
+
+      res.send(payments);
     });
-
-    res.send({ message: "Upgrade confirmed" });
-  } catch (error) {
-    console.error(error);
-    res.status(500).send({ message: "Confirm upgrade failed" });
-  }
-  });
-
-
-   app.get("/payments", verifyToken, verifyHR, async (req, res) => {
-    const email = req.decoded.email;
-
-    const payments = await paymentsCollection
-    .find({ hrEmail: email })
-    .sort({ paymentDate: -1 })
-    .toArray();
-
-    res.send(payments);
-    });
-
 
 
 
@@ -644,40 +678,43 @@ async function run() {
 
     // employee related api
     app.get("/employees", verifyToken, verifyHR, async (req, res) => {
-    const hrEmail = req.decoded.email;
+      const hrEmail = req.decoded.email;
 
-    const affiliations = await employeeAffiCollection
-    .find({ hrEmail, status: "active" })
-    .toArray();
+      const affiliations = await employeeAffiCollection
+        .find({ hrEmail, status: "active" })
+        .toArray();
 
-    const employees = await Promise.all(
-    affiliations.map(async (aff) => {
-      const user = await usersCollection.findOne({
-        email: aff.employeeEmail,
-      });
+      const employees = await Promise.all(
+        affiliations.map(async (aff) => {
+          const user = await usersCollection.findOne({
+            email: aff.employeeEmail,
+          });
 
-      const assetCount = await assignedAssetsCollection.countDocuments({
-        employeeEmail: aff.employeeEmail,
-        hrEmail,
-        status: "assigned",
-      });
+          const assetCount = await assignedAssetsCollection.countDocuments({
+            employeeEmail: aff.employeeEmail,
+            hrEmail,
+            status: "assigned",
+          });
 
-      return {
-        _id: aff._id,
-        name: aff.employeeName,
-        email: aff.employeeEmail,
-        joinDate: aff.affiliationDate,
-        photo: user?.profileImage || "",
-        assetsCount: assetCount,
-      };
-    })
-    );
+          return {
+            _id: aff._id,
+            name: aff.employeeName,
+            email: aff.employeeEmail,
+            joinDate: aff.affiliationDate,
+            photo: user?.profileImage || "",
+            assetsCount: assetCount,
+          };
+        })
+      );
 
-    res.send(employees);
+      res.send(employees);
     });
 
-
-    app.patch("/employees/remove/:id", verifyToken, verifyHR, async (req, res) => {
+    app.patch(
+      "/employees/remove/:id",
+      verifyToken,
+      verifyHR,
+      async (req, res) => {
         const id = req.params.id;
 
         await employeeAffiliationsCollection.updateOne(
@@ -685,7 +722,9 @@ async function run() {
           { $set: { status: "inactive" } }
         );
         res.send({ message: "Employee removed from team" });
-    });
+      }
+    );
+
 
 
 
@@ -749,8 +788,6 @@ async function run() {
 
       res.send(result);
     });
-
-
 
 
 
