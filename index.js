@@ -234,26 +234,41 @@ async function run() {
 
 
 
-
-
     // 3. assets related api
     app.get("/assets", verifyToken, verifyHR, async (req, res) => {
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 8;
-      const skip = (page - 1) * limit;
+  const page = Number(req.query.page) || 1;
+  const limit = Number(req.query.limit) || 8;
+  const skip = (page - 1) * limit;
 
-      const query = { hrEmail: req.decoded.email };
+  const search = req.query.search || "";
+  const type = req.query.type || "all";
 
-      const assets = await assetsCollection
-        .find(query)
-        .skip(skip)
-        .limit(limit)
-        .sort({ dateAdded: -1 })
-        .toArray();
-      total = await assetsCollection.countDocuments(query);
+  const query = {
+    hrEmail: req.decoded.email,
+  };
 
-      res.send({ assets, total });
+  // search by product name
+  if (search) {
+    query.productName = { $regex: search, $options: "i" };
+  }
+
+  //  filter by category
+  if (type !== "all") {
+    query.productType = type;
+  }
+
+  const assets = await assetsCollection
+    .find(query)
+    .skip(skip)
+    .limit(limit)
+    .sort({ dateAdded: -1 })
+    .toArray();
+
+  const total = await assetsCollection.countDocuments(query);
+
+  res.send({ assets, total });
     });
+
 
     app.post("/assets", verifyToken, verifyHR, async (req, res) => {
       const hr = await usersCollection.findOne({ email: req.decoded.email });
