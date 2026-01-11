@@ -299,11 +299,20 @@ async function run() {
     });
 
     app.get("/available-assets", verifyToken, async (req, res) => {
-      const assets = await assetsCollection
-        .find({ availableQuantity: { $gt: 0 } })
-        .toArray();
-      res.send(assets);
+    const { sortBy = "dateAdded", order = "desc" } = req.query;
+
+    const sortOption = {
+    [sortBy]: order === "asc" ? 1 : -1,
+    };
+
+    const result = await assetsCollection
+    .find({ availableQuantity: { $gt: 0 } })
+    .sort(sortOption) //  sorting here
+    .toArray();
+
+    res.send(result);
     });
+
 
     app.delete("/assets/:id", verifyToken, verifyHR, async (req, res) => {
       const id = req.params.id;
