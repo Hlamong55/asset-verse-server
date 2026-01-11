@@ -91,16 +91,37 @@ async function run() {
 
     // 1. user related api
     app.post("/users", async (req, res) => {
-      const user = req.body;
-      const existingUser = await usersCollection.findOne({
-        email: user.email,
-      });
+  const user = req.body;
 
-      if (existingUser) {
-        return res.send({ message: "User already exists" });
-      }
-      const result = await usersCollection.insertOne(user);
-      res.send(result);
+  const existingUser = await usersCollection.findOne({
+    email: user.email,
+  });
+
+  if (existingUser) {
+    return res.send({
+      exists: true,
+      profileComplete: existingUser.profileComplete || false,
+      role: existingUser.role || null,
+      user: existingUser,
+    });
+  }
+
+  const newUser = {
+    name: user.name || "",
+    email: user.email,
+    profileImage: user.profileImage || "",
+    role: null, // HR / employee later
+    profileComplete: false,
+    createdAt: new Date(),
+  };
+
+  await usersCollection.insertOne(newUser);
+
+  res.send({
+    exists: false,
+    profileComplete: false,
+    role: null,
+  });
     });
 
     app.get("/users/:email", verifyToken, async (req, res) => {
@@ -125,6 +146,46 @@ async function run() {
       );
       res.send(result);
     });
+
+    app.patch("/users/complete-profile/:email", verifyToken, async (req, res) => {
+  const email = req.params.email;
+
+  if (email !== req.decoded.email) {
+    return res.status(403).send({ message: "Forbidden access" });
+  }
+
+  const {
+    role,
+    fullName,
+    companyName,
+    companyLogo,
+    dob,
+  } = req.body;
+
+  const updateDoc = {
+    name: fullName,
+    role,
+    dob,
+    profileComplete: true,
+    updatedAt: new Date(),
+  };
+
+  if (role === "hr") {
+    updateDoc.companyName = companyName;
+    updateDoc.companyLogo = companyLogo;
+  }
+
+  const result = await usersCollection.updateOne(
+    { email },
+    { $set: updateDoc }
+  );
+
+  res.send({
+    success: true,
+    role,
+  });
+    });
+
 
 
 
