@@ -8,13 +8,9 @@ const port = process.env.PORT || 3000;
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
 
-
-
 // middleware
 app.use(express.json());
 app.use(cors());
-
-
 
 
 // token verify
@@ -80,7 +76,7 @@ async function run() {
     // jwt related api
     app.post("/jwt", (req, res) => {
       const user = req.body; //
-      const token = jwt.sign(user, process.env.JWT_SECRET, { expiresIn: "3d" });
+      const token = jwt.sign(user, process.env.JWT_SECRET, { expiresIn: "7d" });
       res.send({ token });
     });
 
@@ -419,7 +415,6 @@ async function run() {
       res.send(result);
     });
 
-
     app.patch(
       "/requests/approve/:id",
       verifyToken,
@@ -530,7 +525,6 @@ async function run() {
         }
       }
     );
-
 
     app.patch(
       "/requests/reject/:id",
@@ -698,7 +692,6 @@ async function run() {
       }
     });
 
-
     app.post(
       "/create-checkout-session",
       verifyToken,
@@ -803,7 +796,7 @@ async function run() {
       async (req, res) => {
         const id = req.params.id;
 
-        await employeeAffiliationsCollection.updateOne(
+        await employeeAffiCollection.updateOne(
           { _id: new ObjectId(id) },
           { $set: { status: "inactive" } }
         );
@@ -851,7 +844,7 @@ async function run() {
     app.get("/hr/bar-charts", verifyToken, verifyHR, async (req, res) => {
       const hrEmail = req.decoded.email;
 
-      result = await requestsCollection
+      const result = await requestsCollection
         .aggregate([
           { $match: { hrEmail } },
           {
